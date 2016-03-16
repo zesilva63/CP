@@ -17,9 +17,9 @@
 -- Curso: Mestrado Integrado em Engenharia Informática 
 --
 -- Aluno 2
--- Número:
--- Nome:
--- Curso:
+-- Número: Ricardo António Gonçalves Pereira
+-- Nome: A
+-- Curso: Mestrado Integrado em Engenharia Informática
 --
 
 
@@ -49,6 +49,7 @@ test_adj = adj g1 1 ~?= fromList [Edge 1 1]
 -- Defina testes unitários para todas as funções do módulo Graph,
 -- tentando obter o máximo de cobertura de expressões, condições, etc.
 --
+
            
 main = runTestTT $ TestList [test_adj]
 
