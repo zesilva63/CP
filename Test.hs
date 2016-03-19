@@ -181,6 +181,20 @@ test_isPathOf3 :: Test
 test_isPathOf3 = isPathOf [Edge 1 2, Edge 2 3] g4 ~?= True 
 
 -- Funcao path 
+test_path1 :: Test 
+test_path1 = path g4x2 1 4 ~?= Just [Edge 1 2,Edge 2 4]
+
+test_path2 :: Test 
+test_path2 = path g4x2 5 1 ~?= Nothing 
+
+
+-- Funcao topo VER MELHOR!!!!
+test_topo1 :: Test
+test_topo1 = topo g4 ~?= [fromList [1],fromList [2],fromList [3],fromList [4],fromList [5]]
+
+test_topo2 :: Test
+test_topo2 = topo g6 ~?= [fromList [1,5],fromList [2,3,4]]
+
 
 
 
@@ -189,7 +203,8 @@ main = runTestTT $ TestList [test_adj,test_swap,test_empty,test_isEmpty1,
                              test_isDAG1,test_isDAG2,test_isDAG3,test_isForest1,
                              test_isForest2,test_isSubgraphOf1,test_isSubgraphOf2,
                              test_transpose,test_union,test_bft1,test_bft2,test_reachable,
-                             test_isPathOf1,test_isPathOf2,test_isPathOf3]
+                             test_isPathOf1,test_isPathOf2,test_isPathOf3,test_path1,
+                             test_path2]
 
 --
 -- Teste aleatório
@@ -248,3 +263,29 @@ prop_forest = forAll (forest :: Gen (Forest Int)) $ \g -> collect (length (edges
 -- Exemplo de uma propriedade QuickCheck para testar a função adj          
 prop_adj :: Graph Int -> Property
 prop_adj g = forAll (elements $ elems $ nodes g) $ \v -> adj g v `isSubsetOf` edges g
+
+-- Funcao swap
+prop_swap :: Edge Int -> Bool
+prop_swap e = swap(swap e) == e 
+
+-- Funcao emtpy
+prop_empty :: Bool
+prop_empty = Set.null (nodes (Graph.empty))  
+
+-- Funcao isEmpty
+prop_isEmpty :: Graph Int -> Bool
+prop_isEmpty g = if (isEmpty g)
+                 then g == Graph.empty
+                 else length(elems(nodes g4)) /= 0
+
+-- Funcao isValid
+--prop_isValid :: Graph Int -> Bool   
+--prop_isValid g = 
+                
+
+
+
+
+
+
+
