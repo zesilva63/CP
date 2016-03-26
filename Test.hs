@@ -160,12 +160,6 @@ test_bft1 = bft g6 (fromList[4]) ~?= Graph {nodes = fromList[4],edges = fromList
 test_bft2 :: Test
 test_bft2 = bft g6 (fromList[1]) ~?= Graph {nodes = fromList[1,2,3,4],edges = fromList [Edge 2 1,Edge 3 1,Edge 4 1]} 
 
---test_bft3 :: Test
---test_bft3 = bft 
-
---test_bft4 :: Test
---test_bft4 = bft 
-
 -- Funcao reachable
 test_reachable :: Test
 test_reachable = reachable g6 1 ~?= fromList[1,2,3,4]
@@ -205,6 +199,7 @@ main = runTestTT $ TestList [test_adj,test_swap,test_empty,test_isEmpty1,
                              test_transpose,test_union,test_bft1,test_bft2,test_reachable,
                              test_isPathOf1,test_isPathOf2,test_isPathOf3,test_path1,
                              test_path2]
+
 
 --
 -- Teste aleatório
@@ -280,9 +275,46 @@ prop_isEmpty g = if (isEmpty g)
 
 -- Funcao isValid
 --prop_isValid :: Graph Int -> Bool   
---prop_isValid g = 
-                
+--prop_isValid g =
 
+-- Funcao isDAG
+
+verifica :: [Edge Int] -> [Int] -> Bool
+verifica [] l = True 
+verifica (h:t) l = if(elem (source h) l)
+                   then False
+                   else verifica t ((source h):l)
+
+prop_isDAG :: Graph Int -> Bool 
+prop_isDAG g = isDAG g == (isValid g && (verifica (elems(edges g)) []))
+              
+-- Funcao isForest
+
+prop_isForest :: Graph Int -> Bool
+prop_isForest g = isForest g == (isDAG g && (all (\v -> length(Prelude.map target (elems(adj g v)))<2) (nodes g)) )
+
+-- Funcao isSubgraphOf 
+
+prop_isSubgraphOf :: Graph Int -> Graph Int -> Bool
+prop_isSubgraphOf g1 g2 = (isSubgraphOf g1 g2 ) == (all(\v -> v `elem`(elems(nodes g2))) (elems(nodes g1))) -- Fatla verificar os edges!!
+
+-- Funcao transpose
+prop_transpose :: Graph Int -> Bool
+prop_transpose g = transpose(transpose g) == g
+
+-- Funcao union
+prop_union :: Graph Int -> Graph Int -> Bool
+prop_union g1 g2 = (all(\e -> elem e (edges(Graph.union g1 g2))) (edges g1) ) && (all(\e -> elem e (edges(Graph.union g1 g2))) (edges g2)) -- verificar que pode ter elementos a mais
+
+-- Funcao bft
+
+-- Funcao reachable
+
+-- Funcao isPathOf
+
+-- Funcao path 
+
+-- Funcao topo 
 
 
 
