@@ -258,25 +258,59 @@ instance Arbitrary v => Arbitrary (Edge v) where
                    return $ Edge {source = s, target = t}
 
 instance (Ord v, Arbitrary v) => Arbitrary (Graph v) where
-    arbitrary = do es <- arbitrary
-                   return $ Graph {nodes = juntaNodos(es), edges = fromList es}
-                   where
-                      juntaNodos x = Set.map source (fromList x) `Set.union` Set.map target (fromList x)
+    arbitrary = do n <- arbitrary
+                   let nodos = fromList n
+                   if(Set.null nodos) then return $ Graph {nodes = Set.empty, edges = Set.empty }
+                   else do arestas <- listOf(criaEdges n) 
+                           return $ Graph {nodes = nodos, edges = fromList(arestas) }
+                           where
+                              criaEdges x = do e1 <- elements(x)
+                                               e2 <- elements(x)
+                                               return (Edge e1 e2)
 
 prop_valid :: Graph Int -> Property
 prop_valid g = collect (length (edges g)) $ isValid g
 
 -- Gerador de DAGs
 dag :: (Ord v, Arbitrary v) => Gen (DAG v)
-dag = arbitrary `suchThat` isDAG
+dag = do n <- choose(0,20)
+         nodos <- arbitrary
+         if(Prelude.null nodos) then return $ Graph {nodes = Set.empty, edges = Set.empty }
+         else gera_dag (Graph {nodes = fromList(nodos),edges = Set.empty}) n
+
+gera_dag :: (Ord v,Arbitrary v) => Graph v -> Int -> Gen (DAG v)
+gera_dag grafo 0 = do return grafo
+gera_dag grafo n = do aresta <- criaEdge(toList(nodes grafo))
+                      let nGrafo = Graph (nodes grafo) (insert aresta (edges grafo))
+                      if(isDAG nGrafo)
+                      then gera_dag nGrafo (n-1)
+                      else gera_dag grafo (n-1)
+                          where
+                             criaEdge x = do e1 <- elements(x)
+                                             e2 <- elements(x)
+                                             return (Edge e1 e2)
 
 prop_dag :: Property
 prop_dag = forAll (dag :: Gen (DAG Int)) $ \g -> collect (length (edges g)) $ isDAG g
 
 -- Gerador de florestas
 forest :: (Ord v, Arbitrary v) => Gen (Forest v)
-forest = arbitrary `suchThat` isForest
+forest = do n <- choose(0,50)
+            nodos <- arbitrary
+            if(Prelude.null nodos) then return $ Graph {nodes = Set.empty, edges = Set.empty }
+            else gera_forest (Graph {nodes = fromList(nodos),edges = Set.empty}) n
 
+gera_forest :: (Ord v,Arbitrary v) => Graph v -> Int -> Gen (DAG v)
+gera_forest grafo 0 = do return grafo
+gera_forest grafo n = do aresta <- criaEdge(toList(nodes grafo))
+                         let nGrafo = Graph (nodes grafo) (insert aresta (edges grafo))
+                         if(isForest nGrafo)
+                         then gera_forest nGrafo (n-1)
+                         else gera_forest grafo (n-1)
+                             where
+                                criaEdge x = do e1 <- elements(x)
+                                                e2 <- elements(x)
+                                                return (Edge e1 e2)
 prop_forest :: Property
 prop_forest = forAll (forest :: Gen (Forest Int)) $ \g -> collect (length (edges g)) $ isForest g
 
@@ -302,51 +336,41 @@ prop_empty :: Property
 prop_empty = property(Set.null (nodes (Graph.empty)))  
 
 -- Funcao isEmpty
-prop_isEmpty :: Graph Int -> Bool
-prop_isEmpty g = if (isEmpty g)
-                 then g == Graph.empty
-                 else length(elems(nodes g)) /= 0
+prop_isEmpty :: Graph Int -> Property
+prop_isEmpty g = property(isEmpty g == (length(elems(nodes g)) == 0))
 
 -- Funcao isValid
-check :: [Int] -> Edge Int -> Bool
-check [] x = False
-check (h:t) x = if(h == source x )
-                then True 
-                else if (h == target x)
-                     then True
-                     else check t x
 
 prop_isValid :: Graph Int -> Property   
-prop_isValid g = property((isValid g) == (all ( \v -> check (elems(nodes g)) v) (elems(edges g))))
+prop_isValid g | Set.null(edges g) = label "null" True  
+               | otherwise = isValid g ==>  (forAll (elements $ elems $ edges g) $ \v -> ((source v) `elem` (elems(nodes g)) .&&. (target v) `elem`  (elems(nodes g))) )
 
 -- Funcao isDAG
 
-verifica :: [Edge Int] -> [Int] -> Bool
-verifica [] l = True 
-verifica (h:t) l = if(elem (source h) l)
-                   then False
-                   else verifica t ((source h):l)
-
-prop_isDAG :: Graph Int -> Bool 
-prop_isDAG g = isDAG g == (isValid g && (verifica (elems(edges g)) []))
+prop_isDAG :: Graph Int -> Property
+prop_isDAG g  | Set.null(edges g) = label "null" True  
+              | otherwise = isDAG g ==> (forAll (elements $ elems $ edges g) $ \v -> forAll( elements $ elems (reachable g (target v))) $ \n -> not( (source v) `elem` elems(reachable g  n)))
               
 -- Funcao isForest
 
-prop_isForest :: Graph Int -> Bool
-prop_isForest g = isForest g == (isDAG g && (all (\v -> length(Prelude.map target (elems(adj g v)))<2) (nodes g)) )
+prop_isForest :: Graph Int -> Property
+prop_isForest g | Set.null(nodes g) = label "null" True  
+                | otherwise = isForest g ==>  ( forAll (elements $ elems $ nodes g) $ \v -> length(elems(adj g v))<2) 
 
 -- Funcao isSubgraphOf 
 
-prop_isSubgraphOf :: Graph Int -> Graph Int -> Bool
-prop_isSubgraphOf g1 g2 = (isSubgraphOf g1 g2 ) == ( all(\v -> v `elem`(elems(nodes g2))) (elems(nodes g1)) && all(\v -> v `elem`(elems(edges g2))) (elems(edges g1)) )
+prop_isSubgraphOf :: Graph Int -> Graph Int -> Property -- nao passa nos 100
+prop_isSubgraphOf g1 g2 = isSubgraphOf g1 g2  ==> (nodes g1 `isSubsetOf` nodes g2) .&&. (edges g1 `isSubsetOf` edges g2) 
 
 -- Funcao transpose
 prop_transpose :: Graph Int -> Property
 prop_transpose g = property $ transpose(transpose g) == g
 
 -- Funcao union
-prop_union :: Graph Int -> Graph Int -> Bool
-prop_union g1 g2 = (all(\e -> elem e (edges(Graph.union g1 g2))) (edges g1) ) && (all(\e -> elem e (edges(Graph.union g1 g2))) (edges g2)) -- verificar que pode ter elementos a mais
+prop_union :: Graph Int -> Graph Int -> Property
+prop_union g1 g2 | Set.null(edges g1) = label "null" True  
+                 |Set.null(edges g2) = label "null" True  
+                 | otherwise = (forAll (elements $ elems $ edges g1) $ \e ->  e `elem` (edges(Graph.union g1 g2)) )  .&&. ( forAll (elements $ elems $ edges g2) $ \e -> e `elem` (edges(Graph.union g1 g2)) ) 
 
 -- Funcao bft
 --prop_bft :: Graph Int -> Set Int -> Bool -- funcao a pecorre caminho , caso nao exista tem dar uma lista vazia !
@@ -354,18 +378,19 @@ prop_union g1 g2 = (all(\e -> elem e (edges(Graph.union g1 g2))) (edges g1) ) &&
 --        where f n [] x = 
 
 -- Funcao reachable
-prop_reachable :: Graph Int -> Int -> Bool
-prop_reachable g v = if(isEmpty(g) || elems(edges(g))==[])
-                     then True  
-                     else all (\x -> elems(nodes(bft g (singleton x)))/=[] ) (elems(reachable g v)) 
+prop_reachable :: Graph Int -> Int -> Property
+prop_reachable g v  | Set.null(edges g) = label "null" True  
+                    | otherwise = forAll (elements $ elems $ reachable g v) $ \v -> elems(nodes(bft g (singleton v)))/=[]  
 
 -- Funcao isPathOf
-prop_isPathOf :: Graph.Path Int -> Graph Int -> Bool
-prop_isPathOf l g = all (\v-> (v `elem` elems(edges g)) == (isPathOf l g)) l 
+prop_isPathOf :: Graph.Path Int -> Graph Int -> Property
+prop_isPathOf l g  | Set.null(edges g) = label "null" True  
+                   | otherwise = isPathOf l g ==> forAll (elements $ elems $ edges g) $ \v-> (v `elem` elems(edges g))  
+
 
 -- Funcao path
 --path :: Graph Int -> Int -> Int -> Bool
---path g o d =  
+--path g o d = 
 
 -- Funcao topo 
 
