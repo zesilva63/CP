@@ -4,7 +4,7 @@
 -- O projecto consiste em desenvolver testes para o módulo Graph.hs
 -- (para grafos orientados e não pesados).
 -- Mais concretamente, o projecto consiste em 3 tarefas que são descritas abaixo.
--- O prazo para entrega é o dia 3 de Abril. Cada grupo deve enviar apenas
+-- O prazo para entrega é o dia 28 de Abril. Cada grupo deve enviar apenas
 -- o módulo de testes (este módulo) por email para calculodeprogramas@gmail.com
 -- O nome do ficheiro deve identificar os números dos 2 alunos do grupo (numero1_numero2.hs).
 -- Certifiquem-se que o módulo de testes desenvolvido compila correctamente antes
