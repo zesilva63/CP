@@ -4,7 +4,7 @@
 -- O projecto consiste em desenvolver testes para o módulo Graph.hs
 -- (para grafos orientados e não pesados).
 -- Mais concretamente, o projecto consiste em 3 tarefas que são descritas abaixo.
--- O prazo para entrega é o dia 28 de Abril. Cada grupo deve enviar apenas
+-- O prazo para entrega é o dia 3 de Abril. Cada grupo deve enviar apenas
 -- o módulo de testes (este módulo) por email para calculodeprogramas@gmail.com
 -- O nome do ficheiro deve identificar os números dos 2 alunos do grupo (numero1_numero2.hs).
 -- Certifiquem-se que o módulo de testes desenvolvido compila correctamente antes
@@ -29,6 +29,7 @@ import Graph
 import Test.HUnit hiding (path)
 import Test.QuickCheck
 import Data.Set as Set
+import Data.Maybe
 
 --
 -- Teste unitário
@@ -79,13 +80,6 @@ g4 :: Graph Int
 g4 = Graph {nodes = fromList [1,2,3,4,5], 
             edges = fromList [Edge 1 2, Edge 2 3, Edge 3 4, Edge 4 5]
             }
-
--- Grafo não válido, pois o nodo 4 nao se encontra na lista mas faz parte dos vertices.
---g4F :: Graph Int 
---g4F = Graph {nodes = fromList [1,2,3,5],
---             edges = fromList [Edge 1 2, Edge 2 3, Edge 3 4, Edge 4 5]
---            }
-
 -- Grafo que contem o resultado da junção do grafo g4 com o grafo g2
 g4x2 :: Graph Int
 g4x2 = Graph {nodes = fromList [1,2,3,4,5], 
@@ -314,8 +308,6 @@ gera_forest grafo n = do aresta <- criaEdge(toList(nodes grafo))
 prop_forest :: Property
 prop_forest = forAll (forest :: Gen (Forest Int)) $ \g -> collect (length (edges g)) $ isForest g
 
-
-
 --
 -- Tarefa 3
 --
@@ -329,7 +321,7 @@ prop_adj g = forAll (elements $ elems $ nodes g) $ \v -> adj g v `isSubsetOf` ed
 
 -- Funcao swap
 prop_swap :: Edge Int -> Property
-prop_swap e = property $ swap(swap e) == e
+prop_swap e = swap(swap e) == e .&&. source e == target(swap e) .&&. target e == source(swap e)
 
 -- Funcao emtpy
 prop_empty :: Property
@@ -337,7 +329,7 @@ prop_empty = property(Set.null (nodes (Graph.empty)))
 
 -- Funcao isEmpty
 prop_isEmpty :: Graph Int -> Property
-prop_isEmpty g = property(isEmpty g == (length(elems(nodes g)) == 0))
+prop_isEmpty g = property( isEmpty g == Set.null(nodes g)  )
 
 -- Funcao isValid
 
@@ -353,47 +345,93 @@ prop_isDAG g  | Set.null(edges g) = label "null" True
               
 -- Funcao isForest
 
-prop_isForest :: Graph Int -> Property
-prop_isForest g | Set.null(nodes g) = label "null" True  
-                | otherwise = isForest g ==>  ( forAll (elements $ elems $ nodes g) $ \v -> length(elems(adj g v))<2) 
+prop_isForestAux :: DAG Int -> Property
+prop_isForestAux g | Set.null(nodes g) = label "null" True  
+                   | otherwise = isForest g ==>  ( forAll (elements $ elems $ nodes g) $ \v -> length(elems(adj g v))<2) 
+
+prop_isForest :: Property
+prop_isForest = forAll (dag :: Gen (DAG Int)) $ \g -> prop_isForestAux g
 
 -- Funcao isSubgraphOf 
 
-prop_isSubgraphOf :: Graph Int -> Graph Int -> Property -- nao passa nos 100
-prop_isSubgraphOf g1 g2 = isSubgraphOf g1 g2  ==> (nodes g1 `isSubsetOf` nodes g2) .&&. (edges g1 `isSubsetOf` edges g2) 
+-- gerador de subgrafos
+sub :: (Ord v,Arbitrary v) => Graph v -> Gen (Graph v)
+sub grafo = do novos <- sublistOf(Set.elems(nodes(grafo)))
+               let ed = sub_aux (Set.elems(edges(grafo))) novos
+               return Graph {nodes = fromList(novos), edges = fromList ed }
+                
+sub_aux :: Eq v => [Edge v] -> [v] -> [Edge v]
+sub_aux [] lista = []
+sub_aux ((Edge x y):t) lista | ((elem x lista) && (elem y lista)) = (Edge x y) : sub_aux t lista
+                             | otherwise = sub_aux t lista
+
+prop_isSubgraphOfAux :: Graph Int -> Graph Int -> Property 
+prop_isSubgraphOfAux g1 g2 = isSubgraphOf g1 g2  ==> (nodes g1 `isSubsetOf` nodes g2) .&&. (edges g1 `isSubsetOf` edges g2) 
+
+prop_isSubgraphOf :: Graph Int -> Property
+prop_isSubgraphOf g = forAll(sub g :: Gen (Graph Int)) $ \g1 -> prop_isSubgraphOfAux g1 g
 
 -- Funcao transpose
 prop_transpose :: Graph Int -> Property
-prop_transpose g = property $ transpose(transpose g) == g
+prop_transpose g = property $ transpose(transpose g) == g  
+
+prop_transpose2 :: Graph Int -> Property
+prop_transpose2 g | Set.null(edges g) = label "null" True
+                  | otherwise = forAll (elements $ elems $ edges(transpose g)) $ \v -> singleton(swap v) `isSubsetOf` edges g
 
 -- Funcao union
 prop_union :: Graph Int -> Graph Int -> Property
-prop_union g1 g2 | Set.null(edges g1) = label "null" True  
-                 |Set.null(edges g2) = label "null" True  
+prop_union g1 g2 | Set.null(edges g1) || Set.null(edges g2) = label "null" True  
                  | otherwise = (forAll (elements $ elems $ edges g1) $ \e ->  e `elem` (edges(Graph.union g1 g2)) )  .&&. ( forAll (elements $ elems $ edges g2) $ \e -> e `elem` (edges(Graph.union g1 g2)) ) 
 
--- Funcao bft
---prop_bft :: Graph Int -> Set Int -> Bool -- funcao a pecorre caminho , caso nao exista tem dar uma lista vazia !
---prop_bft g v = f (elems(nodes(g))) (elems(edges(bft g v))) v
---        where f n [] x = 
+-- Funcao bft 
 
+prop_bft :: Graph Int  -> Property
+prop_bft g   | Set.null(nodes g) = label "null" True
+             | otherwise = forAll (elements $ elems $ nodes g) $ \v -> do let cam = elems $ edges $ bft g (singleton v)
+                                                                          if(Prelude.null cam) 
+                                                                          then property (True)  
+                                                                          else forAll (elements $ cam) $ \e -> (swap e) `elem` elems(edges g) .&&. v `elem` elems(nodes g)
+
+--prop_bft2 :: Graph Int -> Property
+--prop_bft2 g = property (isForest $ bft g (criaList g) )
+--              where criaList g = do l <- (listOf $ elements $ elems $ nodes g)
+--                                    fromList[l]
+                                    
+    
 -- Funcao reachable
-prop_reachable :: Graph Int -> Int -> Property
-prop_reachable g v  | Set.null(edges g) = label "null" True  
-                    | otherwise = forAll (elements $ elems $ reachable g v) $ \v -> elems(nodes(bft g (singleton v)))/=[]  
+prop_reachable :: Graph Int -> Property
+prop_reachable g   | Set.null(edges g) = label "null" True  
+                   | otherwise = forAll (elements $ elems $ nodes g) $ \v -> forAll (elements $ elems $ reachable g v) $ \e -> elems(nodes(bft g (singleton e)))/=[]  
 
 -- Funcao isPathOf
-prop_isPathOf :: Graph.Path Int -> Graph Int -> Property
-prop_isPathOf l g  | Set.null(edges g) = label "null" True  
-                   | otherwise = isPathOf l g ==> forAll (elements $ elems $ edges g) $ \v-> (v `elem` elems(edges g))  
-
+prop_isPathOf :: Graph Int -> Property
+prop_isPathOf  g  | Set.null(nodes g) = label "null" True
+                  | otherwise = forAll (elements $ elems $ nodes g) $ \o-> forAll (elements $ elems $ nodes g) $ \d-> if(path g o d /= Nothing) 
+                                                                                                                      then isPathOf (fromJust(path g o d)) g
+                                                                                                                      else isPathOf [] g
 
 -- Funcao path
---path :: Graph Int -> Int -> Int -> Bool
---path g o d = 
+prop_path :: Graph Int -> Property
+prop_path g  | Set.null(nodes g) = label "null" True
+             | otherwise = forAll (elements $ elems $ nodes g) $ \o-> forAll (elements $ elems $ nodes g) $ \d-> do let cam = path g o d
+                                                                                                                    if(cam /= Nothing && fromJust cam /= []) 
+                                                                                                                    then forAll (elements $ fromJust cam) $ \ e ->(singleton e) `isSubsetOf` (edges g)
+                                                                                                                    else property(True)
 
--- Funcao topo 
+-- Funcao topo
+check :: [Set Int] -> DAG Int -> Property
+check [h] g = property (True)
+check (h1:t) g = forAll (elements $ elems $ h1) $ \v1 -> if(not(Set.null (adj g v1)))
+                                                          then forAll (elements $ Prelude.map (target) (elems $ adj g v1)) $ \v2 -> v2 `elem` converte (Prelude.map (elems) t) .&&. check t g
+                                                          else property (True)
+              where converte [] =[]
+                    converte (h:t) = h++converte t 
 
+prop_topoAux :: DAG Int -> Property
+prop_topoAux g | Set.null (nodes g) || Set.null(edges g) = label "null" True
+               | otherwise = check (topo g) g
 
-
+prop_topo :: Property
+prop_topo = forAll (dag :: Gen (DAG Int)) $ \g -> prop_topoAux g
 
