@@ -262,10 +262,12 @@ instance (Ord v, Arbitrary v) => Arbitrary (Graph v) where
                                                e2 <- elements(x)
                                                return (Edge e1 e2)
 
+
 prop_valid :: Graph Int -> Property
 prop_valid g = collect (length (edges g)) $ isValid g
 
 -- Gerador de DAGs
+
 dag :: (Ord v, Arbitrary v) => Gen (DAG v)
 dag = do n <- choose(0,20)
          nodos <- arbitrary
@@ -284,10 +286,14 @@ gera_dag grafo n = do aresta <- criaEdge(toList(nodes grafo))
                                              e2 <- elements(x)
                                              return (Edge e1 e2)
 
+
 prop_dag :: Property
 prop_dag = forAll (dag :: Gen (DAG Int)) $ \g -> collect (length (edges g)) $ isDAG g
 
+
+
 -- Gerador de florestas
+
 forest :: (Ord v, Arbitrary v) => Gen (Forest v)
 forest = do n <- choose(0,50)
             nodos <- arbitrary
@@ -305,6 +311,7 @@ gera_forest grafo n = do aresta <- criaEdge(toList(nodes grafo))
                                 criaEdge x = do e1 <- elements(x)
                                                 e2 <- elements(x)
                                                 return (Edge e1 e2)
+
 prop_forest :: Property
 prop_forest = forAll (forest :: Gen (Forest Int)) $ \g -> collect (length (edges g)) $ isForest g
 
@@ -353,8 +360,6 @@ prop_isForest :: Property
 prop_isForest = forAll (dag :: Gen (DAG Int)) $ \g -> prop_isForestAux g
 
 -- Funcao isSubgraphOf 
-
--- gerador de subgrafos
 sub :: (Ord v,Arbitrary v) => Graph v -> Gen (Graph v)
 sub grafo = do novos <- sublistOf(Set.elems(nodes(grafo)))
                let ed = sub_aux (Set.elems(edges(grafo))) novos
@@ -388,17 +393,14 @@ prop_union g1 g2 | Set.null(edges g1) || Set.null(edges g2) = label "null" True
 
 prop_bft :: Graph Int  -> Property
 prop_bft g   | Set.null(nodes g) = label "null" True
-             | otherwise = forAll (elements $ elems $ nodes g) $ \v -> do let cam = elems $ edges $ bft g (singleton v)
-                                                                          if(Prelude.null cam) 
-                                                                          then property (True)  
-                                                                          else forAll (elements $ cam) $ \e -> (swap e) `elem` elems(edges g) .&&. v `elem` elems(nodes g)
+             | otherwise = forAll (sub g :: Gen (Graph Int)) $ \g1 -> do let cam = elems $ edges $ bft g (nodes g1)
+                                                                         if(Prelude.null cam) 
+                                                                         then property (True)  
+                                                                         else forAll (elements $ cam) $ \e -> (swap e) `elem` elems(edges g) .&&. (nodes g1) `isSubsetOf` (nodes g)
 
---prop_bft2 :: Graph Int -> Property
---prop_bft2 g = property (isForest $ bft g (criaList g) )
---              where criaList g = do l <- (listOf $ elements $ elems $ nodes g)
---                                    fromList[l]
-                                    
-    
+prop_bft2 :: Graph Int -> Property
+prop_bft2 g = forAll(sub g :: Gen (Graph Int)) $ \g1 -> isForest $ bft g (nodes g1)
+
 -- Funcao reachable
 prop_reachable :: Graph Int -> Property
 prop_reachable g   | Set.null(edges g) = label "null" True  
@@ -418,6 +420,10 @@ prop_path g  | Set.null(nodes g) = label "null" True
                                                                                                                     if(cam /= Nothing && fromJust cam /= []) 
                                                                                                                     then forAll (elements $ fromJust cam) $ \ e ->(singleton e) `isSubsetOf` (edges g)
                                                                                                                     else property(True)
+prop_path2 :: Graph Int -> Int -> Int -> Property
+prop_path2 g o d = if(path g o d /= Nothing)
+                   then isPathOf (fromJust(path g o d)) g .&&. d `elem` elems(reachable g o)
+                   else property (d `notElem` elems(reachable g o) )
 
 -- Funcao topo
 check :: [Set Int] -> DAG Int -> Property
