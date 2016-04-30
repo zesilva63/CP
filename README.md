@@ -1,6 +1,9 @@
 # CP
 Trabalho de CP - HUnit Tests & QuickCheck about oriented Graphs
 
-José António Dantas Silva
+*Aluno 1:
+[José António Dantas Silva](https://github.com/zesilva63)
+A74576
 
-Ricardo António Gonçalves Pereira
+[Ricardo António Gonçalves Pereira](https://github.com/ricardopereira33)
+A74185
